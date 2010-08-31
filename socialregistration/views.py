@@ -18,9 +18,9 @@ from django.contrib.auth import login, authenticate, logout as auth_logout
 from django.contrib.sites.models import Site
 
 from socialregistration.forms import UserForm
-from socialregistration.utils import (OAuthClient, OAuthTwitter,
+from socialregistration.utils import (OAuthClient, OAuthTwitter, OAuthLinkedin,
     OpenID, _https, DiscoveryFailure)
-from socialregistration.models import FacebookProfile, TwitterProfile, OpenIDProfile
+from socialregistration.models import FacebookProfile, TwitterProfile, OpenIDProfile, LinkedinProfile
 
 
 FB_ERROR = _('We couldn\'t validate your Facebook credentials')
@@ -142,17 +142,12 @@ def facebook_connect(request, template='socialregistration/facebook.html',
     return HttpResponseRedirect(_get_next(request))
 
 def logout(request, redirect_url=None):
-    """
-    Logs the user out of django. This is only a wrapper around
-    django.contrib.auth.logout. Logging users out of Facebook for instance
-    should be done like described in the developer wiki on facebook.
-    http://wiki.developers.facebook.com/index.php/Connect/Authorization_Websites#Logging_Out_Users
-    """
+
     auth_logout(request)
 
     url = redirect_url or getattr(settings, 'LOGOUT_REDIRECT_URL', '/')
 
-    return HttpResponseRedirect(url)
+    return HttpResponseRedirect(url) 
 
 def twitter(request, account_inactive_template='socialregistration/account_inactive.html',
     extra_context=dict()):
@@ -198,6 +193,34 @@ def twitter(request, account_inactive_template='socialregistration/account_inact
 
     return HttpResponseRedirect(_get_next(request))
 
+def linkedin(request):
+    """
+    Actually setup/login an account relating to a linkedin user after the oauth 
+    process is finished successfully
+    """
+    client = OAuthLinkedin(
+        request, settings.LINKEDIN_CONSUMER_KEY,
+        settings.LINKEDIN_CONSUMER_SECRET_KEY,
+        settings.LINKEDIN_REQUEST_TOKEN_URL,
+    )
+    
+    user_info = client.get_user_info()
+
+    user = authenticate(linkedin_id=user_info['id'])
+
+    if user is None:
+        profile = LinkedinProfile(linkedin_id=user_info['id'])
+        user = User()
+        request.session['socialregistration_profile'] = profile
+        request.session['socialregistration_user'] = user
+        request.session['next'] = _get_next(request)
+        return HttpResponseRedirect(reverse('socialregistration_setup'))
+
+    login(request, user)
+    request.user.message_set.create(message=_('You have succesfully been logged in with your linkedin account'))
+    
+    return HttpResponseRedirect(_get_next(request))
+
 def oauth_redirect(request, consumer_key=None, secret_key=None,
     request_token_url=None, access_token_url=None, authorization_url=None,
     callback_url=None, parameters=None):
@@ -217,6 +240,8 @@ def oauth_callback(request, consumer_key=None, secret_key=None,
     View to handle final steps of OAuth based authentication where the user
     gets redirected back to from the service provider
     """
+    if 'oauth_verifier' in request.REQUEST:
+        parameters = 'oauth_verifier='+request.REQUEST['oauth_verifier']
     client = OAuthClient(request, consumer_key, secret_key, request_token_url,
         access_token_url, authorization_url, callback_url, parameters)
 
@@ -236,12 +261,11 @@ def openid_redirect(request):
     """
     request.session['next'] = _get_next(request)
     request.session['openid_provider'] = request.GET.get('openid_provider')
-
     client = OpenID(
         request,
         'http%s://%s%s' % (
             _https(),
-            Site.objects.get_current().domain,
+            request.get_host(),
             reverse('openid_callback')
         ),
         request.GET.get('openid_provider')
@@ -261,7 +285,7 @@ def openid_callback(request, template='socialregistration/openid.html',
         request,
         'http%s://%s%s' % (
             _https(),
-            Site.objects.get_current().domain,
+            request.get_host(),
             reverse('openid_callback')
         ),
         request.session.get('openid_provider')
@@ -302,3 +326,4 @@ def openid_callback(request, template='socialregistration/openid.html',
         dict(),
         context_instance=RequestContext(request)
     )
+

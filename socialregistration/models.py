@@ -26,6 +26,17 @@ class TwitterProfile(models.Model):
     def authenticate(self):
         return authenticate(twitter_id=self.twitter_id)
 
+class LinkedinProfile(models.Model):
+    user = models.ForeignKey(User)
+    site = models.ForeignKey(Site, default=Site.objects.get_current)
+    linkedin_id = models.CharField(max_length=255, blank=False, null=False)
+
+    def __unicode__(self):
+        return '%s: %s' % (self.user, self.linkedin_id)
+
+    def authenticate(self):
+        return authenticate(linkedin_id=self.linkedin_id)
+
 class OpenIDProfile(models.Model):
     user = models.ForeignKey(User)
     site = models.ForeignKey(Site, default=Site.objects.get_current)

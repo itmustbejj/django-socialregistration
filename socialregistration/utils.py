@@ -221,7 +221,7 @@ class OAuthClient(object):
             request_token = self._get_rt_from_session()
             token = oauth.Token(request_token['oauth_token'], request_token['oauth_token_secret'])
             self.client = oauth.Client(self.consumer, token)
-            response, content = self.client.request(self.access_token_url, "GET")
+            response, content = self.client.request(self.access_token_url, "POST",self.parameters)
             if response['status'] != '200':
                 raise OAuthError(
                     _('Invalid response while obtaining access token from "%s".') % get_token_prefix(self.request_token_url))
@@ -294,7 +294,6 @@ class OAuth(object):
         POST or GET data.
         """
         access_token = self._get_at_from_session()
-
         token = oauth.Token(access_token['oauth_token'], access_token['oauth_token_secret'])
 
         client = oauth.Client(self.consumer, token)
@@ -318,4 +317,36 @@ class OAuthTwitter(OAuth):
 
     def get_user_info(self):
         user = simplejson.loads(self.query(self.url))
+        return user
+
+from lxml import etree
+from urlparse import urlparse, parse_qs
+class OAuthLinkedin(OAuth):
+    """
+    Verifying linkedin credentials
+    """
+    url = 'http://api.linkedin.com/v1/people/~'
+    
+    def get_user_info(self):
+
+        data = etree.fromstring(self.query(self.url))
+        profile_url = data.find('site-standard-profile-request/url').text
+        return {'id':parse_qs(urlparse(profile_url).query)['key'][0]}
+        user = dict()
+        user_xml = self.header_based(self.url)
+
+        xml = minidom.parseString(user_xml)
+        
+        user_url = xml.getElementsByTagName('url')[0].childNodes[0].nodeValue
+
+        reg = r'.*key=(?P<key>[\d]+)&.*'
+        match = re.match(reg, user_url)
+        
+        user['id'] = '%(key)s' % {'key': match.group('key') }
+        first_name = xml.getElementsByTagName('first-name')[0].childNodes[0].nodeValue
+        last_name = xml.getElementsByTagName('last-name')[0].childNodes[0].nodeValue
+
+        user['screen_name'] = '%(first_name)s %(last_name)s' % {'first_name': first_name,
+                                                                'last_name': last_name }
+        
         return user

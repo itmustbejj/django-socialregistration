@@ -1,0 +1,7 @@
+{% load linkedin_tags %}
+<form class="connect-button" name="login" method="post" action="{% url linkedin_redirect %}">
+{% if next %}
+    <input type="hidden" name="next" value="{{ next }}" />
+{% endif %}
+<input type="image" onclick="this.form.submit();" src="http://developer.linkedin.com/servlet/JiveServlet/downloadImage/102-1182-2-1063/197-31/log-in-linkedin-large.png" />
+</form>

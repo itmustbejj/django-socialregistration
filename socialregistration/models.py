@@ -4,38 +4,32 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.sites.models import Site 
 
-class FacebookProfile(models.Model):
+ST_FACEBOOK = 'fb'
+ST_TWITTER = 'tw'
+ST_LINKEDIN = 'li'
+
+SOC_CHOICES = (
+        (ST_FACEBOOK, 'FaceBook'),
+        (ST_TWITTER, 'Twitter'),
+        (ST_LINKEDIN,'LinkedIn')
+        )
+
+
+class SocialProfile(models.Model):
     user = models.ForeignKey(User)
     site = models.ForeignKey(Site, default=Site.objects.get_current)
     uid = models.CharField(max_length=255, blank=False, null=False)
+    username = models.CharField(max_length=255,blank=True,null=True)
+    avatar = models.CharField(max_length=255, blank=True,null=True)
+    soc_type = models.CharField(max_length=2,choices=SOC_CHOICES)
     
     def __unicode__(self):
         return u'%s: %s' % (self.user, self.uid)
     
     def authenticate(self):
-        return authenticate(uid=self.uid)
+        return authenticate(uid=self.uid, soc_type=self.soc_type)
 
-class TwitterProfile(models.Model):
-    user = models.ForeignKey(User)
-    site = models.ForeignKey(Site, default=Site.objects.get_current)
-    twitter_id = models.PositiveIntegerField()
-    
-    def __unicode__(self):
-        return u'%s: %s' % (self.user, self.twitter_id)
-    
-    def authenticate(self):
-        return authenticate(twitter_id=self.twitter_id)
 
-class LinkedinProfile(models.Model):
-    user = models.ForeignKey(User)
-    site = models.ForeignKey(Site, default=Site.objects.get_current)
-    linkedin_id = models.CharField(max_length=255, blank=False, null=False)
-
-    def __unicode__(self):
-        return '%s: %s' % (self.user, self.linkedin_id)
-
-    def authenticate(self):
-        return authenticate(linkedin_id=self.linkedin_id)
 
 class OpenIDProfile(models.Model):
     user = models.ForeignKey(User)

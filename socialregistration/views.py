@@ -6,6 +6,7 @@ from django.core.urlresolvers import reverse
 from django.shortcuts import render_to_response
 from django.utils.translation import gettext as _
 from django.http import HttpResponseRedirect
+import facebook
 
 try:
     from django.views.decorators.csrf import csrf_protect
@@ -20,7 +21,8 @@ from django.contrib.sites.models import Site
 from socialregistration.forms import UserForm
 from socialregistration.utils import (OAuthClient, OAuthTwitter, OAuthLinkedin,
     OpenID, _https, DiscoveryFailure)
-from socialregistration.models import FacebookProfile, TwitterProfile, OpenIDProfile, LinkedinProfile
+from socialregistration.models import SocialProfile, OpenIDProfile, \
+        ST_LINKEDIN, ST_FACEBOOK, ST_TWITTER
 
 
 FB_ERROR = _('We couldn\'t validate your Facebook credentials')
@@ -102,20 +104,33 @@ def facebook_login(request, template='socialregistration/facebook.html',
     View to handle the Facebook login
     """
     
-    if request.facebook.uid is None:
+    fb_user = facebook.get_user_from_cookie(request.COOKIES,
+        settings.FACEBOOK_API_KEY, settings.FACEBOOK_SECRET_KEY)
+
+    if fb_user is None:
         extra_context.update(dict(error=FB_ERROR))
         return render_to_response(template, extra_context,
             context_instance=RequestContext(request))
 
-    user = authenticate(uid=request.facebook.uid)
+    user = authenticate(uid=fb_user['uid'], soc_type = ST_FACEBOOK)
+    graph = facebook.GraphAPI(fb_user['access_token']).get_object(fb_user['uid'])
 
     if user is None:
+
         request.session['socialregistration_user'] = User()
-        request.session['socialregistration_profile'] = FacebookProfile(uid=request.facebook.uid)
+        request.session['socialregistration_profile'] =\
+                SocialProfile(
+                        uid=fb_user['uid'],
+                        username='%s %s' %(graph['first_name'], graph['last_name']),
+                        avatar='http://graph.facebook.com/%s/picture' % fb_user['uid'],
+                        soc_type = ST_FACEBOOK)
         request.session['next'] = _get_next(request)
         return HttpResponseRedirect(reverse('socialregistration_setup'))
 
     if not user.is_active:
+        fb_profile = SocialProfile.objects.get(user=user, soc_type=ST_FACEBOOK)
+        fb_profile.username='%s %s' %(graph['first_name'], graph['last_name'])
+        fb_profile.save()
         return render_to_response(account_inactive_template, extra_context,
             context_instance=RequestContext(request))
 
@@ -128,16 +143,27 @@ def facebook_connect(request, template='socialregistration/facebook.html',
     """
     View to handle connecting existing django accounts with facebook
     """
-    if request.facebook.uid is None or request.user.is_authenticated() is False:
+
+    fb_user = facebook.get_user_from_cookie(request.COOKIES,
+        settings.FACEBOOK_API_KEY, settings.FACEBOOK_SECRET_KEY)
+    
+    if fb_user is None or request.user.is_authenticated() is False:
         extra_context.update(dict(error=FB_ERROR))
         return render_to_response(template, extra_context,
             context_instance=RequestContext(request))
-    
+    graph = facebook.GraphAPI(fb_user['access_token']).get_object(fb_user['uid'])
+
     try:
-        profile = FacebookProfile.objects.get(uid=request.facebook.uid)
-    except FacebookProfile.DoesNotExist:
-        profile = FacebookProfile.objects.create(user=request.user,
-            uid=request.facebook.uid)
+        profile = SocialProfile.objects.get(uid=fb_user['uid'],soc_type = ST_FACEBOOK)
+    except SocialProfile.DoesNotExist:
+        profile = SocialProfile.objects.create(user=request.user,
+            uid=fb_user['uid'],
+            username='%s %s' %(graph['first_name'], graph['last_name']),
+            avatar='http://graph.facebook.com/%s/picture' % fb_user['uid'],
+            soc_type = ST_FACEBOOK)
+    else:
+        profile.username='%s %s' %(graph['first_name'], graph['last_name']),
+        profile.save()
 
     return HttpResponseRedirect(_get_next(request))
 
@@ -163,19 +189,26 @@ def twitter(request, account_inactive_template='socialregistration/account_inact
 
     user_info = client.get_user_info()
 
+    try:
+        profile = SocialProfile.objects.get(uid=user_info['id'], soc_type = ST_TWITTER)
+    except SocialProfile.DoesNotExist: # There can only be one profile!
+        profile = SocialProfile(
+                uid=user_info['id'],
+                username=user_info['screen_name'],
+                avatar=user_info['profile_image_url'],
+                soc_type=ST_TWITTER)
+    else:
+        profile.avatar = user_info['profile_image_url']
+        profile.save()
+
     if request.user.is_authenticated():
-        # Handling already logged in users connecting their accounts
-        try:
-            profile = TwitterProfile.objects.get(twitter_id=user_info['id'])
-        except TwitterProfile.DoesNotExist: # There can only be one profile!
-            profile = TwitterProfile.objects.create(user=request.user, twitter_id=user_info['id'])
 
         return HttpResponseRedirect(_get_next(request))
 
-    user = authenticate(twitter_id=user_info['id'])
+    user = authenticate(uid=user_info['id'], soc_type=ST_TWITTER)
 
     if user is None:
-        profile = TwitterProfile(twitter_id=user_info['id'])
+
         user = User()
         request.session['socialregistration_profile'] = profile
         request.session['socialregistration_user'] = user
@@ -206,10 +239,13 @@ def linkedin(request):
     
     user_info = client.get_user_info()
 
-    user = authenticate(linkedin_id=user_info['id'])
+    user = authenticate(uid=user_info['id'], soc_type = ST_LINKEDIN)
 
     if user is None:
-        profile = LinkedinProfile(linkedin_id=user_info['id'])
+        profile = SocialProfile(uid=user_info['id'],
+                    username=user_info['screen_name'],
+                    avatar=user_info['profile_image_url'],
+                    soc_type = ST_LINKEDIN)
         user = User()
         request.session['socialregistration_profile'] = profile
         request.session['socialregistration_user'] = user

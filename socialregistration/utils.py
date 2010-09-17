@@ -304,6 +304,8 @@ class OAuth(object):
             body=body)
 
         if response['status'] != '200':
+            if settings.DEBUG:
+                print content
             raise OAuthError(
                 _('No access to private resources at "%s".') % get_token_prefix(self.request_token_url))
 
@@ -325,28 +327,13 @@ class OAuthLinkedin(OAuth):
     """
     Verifying linkedin credentials
     """
-    url = 'http://api.linkedin.com/v1/people/~'
+    url = 'http://api.linkedin.com/v1/people/~:public'
     
     def get_user_info(self):
-
-        data = etree.fromstring(self.query(self.url))
-        profile_url = data.find('site-standard-profile-request/url').text
-        return {'id':parse_qs(urlparse(profile_url).query)['key'][0]}
-        user = dict()
-        user_xml = self.header_based(self.url)
-
-        xml = minidom.parseString(user_xml)
-        
-        user_url = xml.getElementsByTagName('url')[0].childNodes[0].nodeValue
-
-        reg = r'.*key=(?P<key>[\d]+)&.*'
-        match = re.match(reg, user_url)
-        
-        user['id'] = '%(key)s' % {'key': match.group('key') }
-        first_name = xml.getElementsByTagName('first-name')[0].childNodes[0].nodeValue
-        last_name = xml.getElementsByTagName('last-name')[0].childNodes[0].nodeValue
-
-        user['screen_name'] = '%(first_name)s %(last_name)s' % {'first_name': first_name,
-                                                                'last_name': last_name }
-        
-        return user
+        clean_data = self.query(self.url)
+        data = etree.fromstring(clean_data)
+        return {
+                'id':data.find('id').text,
+                'screen_name':'%s %s' %(data.find('first-name').text,data.find('last-name').text),
+                'profile_image_url':data.find('picture-url').text
+            }

@@ -28,6 +28,7 @@ class SocialProfile(models.Model):
     
     def authenticate(self):
         return authenticate(uid=self.uid, soc_type=self.soc_type)
+    
 
 
 

@@ -34,8 +34,6 @@ from django.utils.translation import gettext as _
 from django.conf import settings
 from django.utils import simplejson
 
-from django.contrib.sites.models import Site
-
 
 from socialregistration.models import OpenIDStore as OpenIDStoreModel, OpenIDNonce
 from urlparse import urlparse
@@ -136,7 +134,7 @@ class OpenID(object):
     def get_redirect(self):
         auth_request = self.consumer.begin(self.endpoint)
         redirect_url = auth_request.redirectURL(
-            'http%s://%s/' % (_https(), Site.objects.get_current().domain),
+            'http%s://%s/' % (_https(), self.request.get_host()),
             self.return_to
         )
         return HttpResponseRedirect(redirect_url)
@@ -144,7 +142,7 @@ class OpenID(object):
     def complete(self):
         self.result = self.consumer.complete(
             dict(self.request.GET.items()),
-            'http%s://%s%s' % (_https(), Site.objects.get_current(),
+            'http%s://%s%s' % (_https(), self.request.get_host(),
                 self.request.path)
         )
 
@@ -242,7 +240,7 @@ class OAuthClient(object):
     def _get_authorization_url(self):
         request_token = self._get_request_token()
         return '%s?oauth_token=%s&oauth_callback=%s' % (self.authorization_url,
-            request_token['oauth_token'], '%s%s' % (Site.objects.get_current().domain,
+            request_token['oauth_token'], '%s%s' % (self.request.get_host(),
                 reverse(self.callback_url)))
 
     def is_valid(self):

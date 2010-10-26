@@ -326,7 +326,6 @@ def openid_callback(request, template='socialregistration/openid.html',
         ),
         request.session.get('openid_provider')
     )
-
     if client.is_valid():
         identity = client.result.identity_url
         if request.user.is_authenticated():

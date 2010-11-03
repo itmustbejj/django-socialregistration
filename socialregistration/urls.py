@@ -68,6 +68,7 @@ if getattr(settings, 'LINKEDIN_CONSUMER_KEY', None) is not None:
                 request_token_url=settings.LINKEDIN_REQUEST_TOKEN_URL,
                 access_token_url=settings.LINKEDIN_ACCESS_TOKEN_URL,
                 authorization_url=settings.LINKEDIN_AUTHORIZATION_URL,
+                callback_url='linkedin',
             ),
             name='linkedin_redirect'),
         

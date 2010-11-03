@@ -1,5 +1,6 @@
-{% load linkedin_tags %}
+{% load linkedin_tags socialregistration_tags%}
 <form class="connect-button" name="login" method="post" action="{% url linkedin_redirect %}">
+{% social_csrf_token %}
 {% if next %}
     <input type="hidden" name="next" value="{{ next }}" />
 {% endif %}

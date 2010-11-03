@@ -332,6 +332,10 @@ class OAuthLinkedin(OAuth):
         data = etree.fromstring(clean_data)
         return {
                 'id':data.find('id').text,
-                'screen_name':'%s %s' %(data.find('first-name').text,data.find('last-name').text),
-                'profile_image_url':data.find('picture-url').text
+                #'screen_name':'%s %s' %(data.find('first-name').text,data.find('last-name').text),
+                'screen_name':'%s' %(data.find('.//public-profile-url')),
+                'first_name':data.find('first-name').text,
+                'last_name':data.find('last-name').text,
+                'profile_image_url':data.find('id').text,
+                'alt_screen_name':'%s' %(data.find('first-name').text[0]+data.find('last-name').text)
             }

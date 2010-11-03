@@ -80,10 +80,13 @@ def setup(request, template='socialregistration/setup.html',
         
     else:
         # Generate user and profile
-        social_user.username = str(uuid.uuid4())[:30]
-        social_user.save()
-
-        social_profile.user = social_user
+        #social_user.username = str(uuid.uuid4())[:30]
+        if request.user.is_authenticated:
+            social_profile.user = request.user
+        else:
+            social_user.username = social_profile.username
+            social_user.save()
+            social_profile.user = social_user
         social_profile.save()
 
         # Authenticate and login
@@ -91,8 +94,10 @@ def setup(request, template='socialregistration/setup.html',
         login(request, user)
 
         # Clear & Redirect
-        del request.session['socialregistration_user']
-        del request.session['socialregistration_profile']
+        if request.session.has_key(u'socialregistration_user'):
+            del request.session['socialregistration_user']
+        if request.session.has_key(u'socialregistration_profile'):
+            del request.session['socialregistration_profile']
         return HttpResponseRedirect(_get_next(request))
 
 if has_csrf:
@@ -208,8 +213,8 @@ def twitter(request, account_inactive_template='socialregistration/account_inact
     user = authenticate(uid=user_info['id'], soc_type=ST_TWITTER)
 
     if user is None:
-
-        user = User()
+        name = user_info['name'].split(' ')
+        user = User(first_name=name[0], last_name=name.pop())
         request.session['socialregistration_profile'] = profile
         request.session['socialregistration_user'] = user
         request.session['next'] = _get_next(request)
@@ -242,11 +247,17 @@ def linkedin(request):
     user = authenticate(uid=user_info['id'], soc_type = ST_LINKEDIN)
 
     if user is None:
+        
+        if user_info['screen_name'].index('pub'):
+            user_info['screen_name'] = user_info['alt_screen_name'].lower()
+        else:
+            user_info['screen_name'] = user_info['screen_name'].split('/').pop()
         profile = SocialProfile(uid=user_info['id'],
                     username=user_info['screen_name'],
                     avatar=user_info['profile_image_url'],
                     soc_type = ST_LINKEDIN)
-        user = User()
+        user = User(first_name=user_info['first_name'],
+                    last_name=user_info['last_name'])
         request.session['socialregistration_profile'] = profile
         request.session['socialregistration_user'] = user
         request.session['next'] = _get_next(request)
